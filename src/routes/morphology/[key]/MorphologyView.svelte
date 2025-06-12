@@ -12,12 +12,15 @@
 	import { term } from '$utils/terminologies';
 	import { wordAudioController } from '$utils/audioController';
 
-	let fetchWordsData, fetchWordSummary;
+	let fetchData, fetchWordsData, fetchWordSummary;
 	let chapter, verse, word;
 	// let fetchWordsData1;
 
+	const params = new URLSearchParams(window.location.search);
+	const getSimilarWords = params.has('similarWords');
+
 	// Split the key to get chapter, verse, and word numbers
-	$: {
+	$: if (!getSimilarWords) {
 		const keySplit = data.key.split(':');
 		chapter = +keySplit[0];
 		verse = +keySplit[1];
@@ -27,19 +30,29 @@
 	}
 
 	// Fetch verse data based on chapter and verse
-	$: fetchData = (async () => {
-		const data = await fetchChapterData({ chapter, skipSave: true, reRenderWhenTheseUpdates: [$__fontType, $__wordTranslation, $__wordTransliteration] });
-		return data[`${chapter}:${verse}`];
-	})();
+	$: if (!getSimilarWords) {
+		fetchData = (async () => {
+			const data = await fetchChapterData({ chapter, skipSave: true, reRenderWhenTheseUpdates: [$__fontType, $__wordTranslation, $__wordTransliteration] });
+			return data[`${chapter}:${verse}`];
+		})();
+	}
 
 	// Fetch words data for morphology
 	$: {
 		fetchWordsData = (async () => {
 			try {
-				const response = await fetch(`${apiEndpoint}/morphology?words=${$__morphologyKey}&word_translation=${$__wordTranslation}&version=${apiVersion}&bypass_cache=${apiByPassCache}`);
-				const data = await response.json();
-				// fetchWordsData1 = data.data;
-				return data.data;
+				let response1, data1;
+
+				if (getSimilarWords) {
+					response1 = await fetch(`${apiEndpoint}/morphology/similar-words?key=${data.key}&word_translation=${$__wordTranslation}&version=${apiVersion}1&bypass_cache=${apiByPassCache}`);
+					data1 = await response1.json();
+					__morphologyKey.set(data.key);
+					return data1.data;
+				} else {
+					response1 = await fetch(`${apiEndpoint}/morphology?words=${$__morphologyKey}&word_translation=${$__wordTranslation}&version=${apiVersion}&bypass_cache=${apiByPassCache}`);
+					data1 = await response1.json();
+					return data1.data;
+				}
 			} catch (error) {
 				console.error(errorLoadingDataMessage, error);
 				return [];
@@ -47,16 +60,18 @@
 		})();
 
 		// Fetch word summary data
-		fetchWordSummary = (async () => {
-			try {
-				const response = await fetch(`${staticEndpoint}/lexicon/word-summaries/${chapter}.json?version=1`);
-				const data = await response.json();
-				return data;
-			} catch (error) {
-				console.error(errorLoadingDataMessage, error);
-				return {};
-			}
-		})();
+		if (!getSimilarWords) {
+			fetchWordSummary = (async () => {
+				try {
+					const response = await fetch(`${staticEndpoint}/lexicon/word-summaries/${chapter}.json?version=1`);
+					const data = await response.json();
+					return data;
+				} catch (error) {
+					console.error(errorLoadingDataMessage, error);
+					return {};
+				}
+			})();
+		}
 	}
 
 	// Set the word root and show the lexicon modal
@@ -70,78 +85,80 @@
 </script>
 
 <div class="space-y-6 my-8">
-	{#if $__currentPage === 'morphology'}
-		<div id="verse-navigator" class="flex flex-row justify-center space-x-8 text-sm">
-			<!-- previous chapter -->
-			{#if verse === 1 && chapter > 1}
-				<a href="/morphology/{+chapter - 1}:1" class={buttonOutlineClasses}>{@html '&#x2190;'} {term('chapter')} {+chapter - 1}</a>
-			{/if}
+	{#if !getSimilarWords}
+		{#if $__currentPage === 'morphology' && !getSimilarWords}
+			<div id="verse-navigator" class="flex flex-row justify-center space-x-8 text-sm">
+				<!-- previous chapter -->
+				{#if verse === 1 && chapter > 1}
+					<a href="/morphology/{+chapter - 1}:1" class={buttonOutlineClasses}>{@html '&#x2190;'} {term('chapter')} {+chapter - 1}</a>
+				{/if}
 
-			<!-- next verse -->
-			{#if verse > 1}
-				<a href="/morphology/{chapter}:{+verse - 1}" class={buttonOutlineClasses}>{@html '&#x2190;'} {term('verse')} {chapter}:{+verse - 1}</a>
-			{/if}
+				<!-- next verse -->
+				{#if verse > 1}
+					<a href="/morphology/{chapter}:{+verse - 1}" class={buttonOutlineClasses}>{@html '&#x2190;'} {term('verse')} {chapter}:{+verse - 1}</a>
+				{/if}
 
-			<!-- previous verse -->
-			{#if verse < quranMetaData[chapter].verses}
-				<a href="/morphology/{chapter}:{+verse + 1}" class={buttonOutlineClasses}>{term('verse')} {chapter}:{+verse + 1} {@html '&#x2192;'}</a>
-			{/if}
+				<!-- previous verse -->
+				{#if verse < quranMetaData[chapter].verses}
+					<a href="/morphology/{chapter}:{+verse + 1}" class={buttonOutlineClasses}>{term('verse')} {chapter}:{+verse + 1} {@html '&#x2192;'}</a>
+				{/if}
 
-			<!-- next chapter -->
-			{#if verse === quranMetaData[chapter].verses && chapter < 114}
-				<a href="/morphology/{+chapter + 1}:1" class={buttonOutlineClasses}>{term('chapter')} {+chapter + 1} {@html '&#x2192;'}</a>
-			{/if}
-		</div>
-	{/if}
-
-	<div id="verse">
-		{#await fetchData}
-			<Spinner />
-		{:then value}
-			<div class="flex flex-wrap justify-center direction-rtl">
-				<WordsBlock key={`${chapter}:${verse}`} {value} />
-			</div>
-		{:catch error}
-			<p>{errorLoadingDataMessage}</p>
-		{/await}
-	</div>
-
-	<div id="word-summary" class="text-center mx-auto md:w-3/4 text-sm md:text-lg pb-6 border-b-2 {window.theme('border')}">
-		{#await fetchWordSummary}
-			<span>...</span>
-		{:then fetchWordSummary}
-			<div class="flex flex-col space-y-4">
-				<span>{@html fetchWordSummary[$__morphologyKey]}</span>
-				<!-- <button class="text-lg font-bold underline" on:click={() => showLexiconModal()}>View Lanes Lexicon Data &rarr;</button> -->
-			</div>
-
-			<!-- Buttons -->
-			<div class="pt-4 flex flex-row justify-center space-x-2 text-xs">
-				<button
-					class={buttonClasses}
-					on:click={() =>
-						wordAudioController({
-							key: data.key,
-							chapter: chapter,
-							verse: verse
-						})}>Play Word</button
-				>
-
-				<!-- Show the "goto verse" button if the user in on morphology page -->
-				{#if $__currentPage === 'morphology'}
-					<a href="/{chapter}/{verse}" class={buttonClasses}>Goto Verse</a>
+				<!-- next chapter -->
+				{#if verse === quranMetaData[chapter].verses && chapter < 114}
+					<a href="/morphology/{+chapter + 1}:1" class={buttonOutlineClasses}>{term('chapter')} {+chapter + 1} {@html '&#x2192;'}</a>
 				{/if}
 			</div>
-		{:catch error}
-			<p>{errorLoadingDataMessage}</p>
-		{/await}
-	</div>
+		{/if}
+
+		<div id="verse">
+			{#await fetchData}
+				<Spinner />
+			{:then value}
+				<div class="flex flex-wrap justify-center direction-rtl">
+					<WordsBlock key={`${chapter}:${verse}`} {value} />
+				</div>
+			{:catch error}
+				<p>{errorLoadingDataMessage}</p>
+			{/await}
+		</div>
+
+		<div id="word-summary" class="text-center mx-auto md:w-3/4 text-sm md:text-lg pb-6 border-b-2 {window.theme('border')}">
+			{#await fetchWordSummary}
+				<span>...</span>
+			{:then fetchWordSummary}
+				<div class="flex flex-col space-y-4">
+					<span>{@html fetchWordSummary[$__morphologyKey]}</span>
+					<!-- <button class="text-lg font-bold underline" on:click={() => showLexiconModal()}>View Lanes Lexicon Data &rarr;</button> -->
+				</div>
+
+				<!-- Buttons -->
+				<div class="pt-4 flex flex-row justify-center space-x-2 text-xs">
+					<button
+						class={buttonClasses}
+						on:click={() =>
+							wordAudioController({
+								key: data.key,
+								chapter: chapter,
+								verse: verse
+							})}>Play Word</button
+					>
+
+					<!-- Show the "goto verse" button if the user in on morphology page -->
+					{#if $__currentPage === 'morphology'}
+						<a href="/{chapter}/{verse}" class={buttonClasses}>Goto Verse</a>
+					{/if}
+				</div>
+			{:catch error}
+				<p>{errorLoadingDataMessage}</p>
+			{/await}
+		</div>
+	{/if}
 
 	<div id="word-details" class="flex flex-col">
 		{#await fetchWordsData}
 			<Spinner />
 		{:then fetchWordsData}
-			{#if !Object.values(fetchWordsData[0].morphology.verbs).every((o) => o === null)}
+			<!-- {#if !Object.values(fetchWordsData[0].morphology.verbs).every((o) => o === null)}
 				{#if Object.keys(fetchWordsData[0].morphology.root.words_with_same_root).length > 0}
 					<div id="word-forms" class="pb-8 pt-2 border-b-2 {window.theme('border')}">
 						<div class="flex flex-col">
@@ -164,7 +181,7 @@
 						</div>
 					</div>
 				{/if}
-			{/if}
+			{/if} -->
 
 			{@const sameRootData = fetchWordsData[0].morphology.root.words_with_same_root}
 			{#if Object.keys(sameRootData).length > 0}
@@ -173,12 +190,12 @@
 				</div>
 			{/if}
 
-			{@const exactWordsData = fetchWordsData[0].morphology.exact_words_in_quran}
+			<!-- {@const exactWordsData = fetchWordsData[0].morphology.exact_words_in_quran}
 			{#if Object.keys(exactWordsData).length > 0}
 				<div id="exact-word-data" class="pb-8 pt-8 border-b-2 {window.theme('border')}">
 					<Table wordData={exactWordsData} tableType={2} />
 				</div>
-			{/if}
+			{/if} -->
 		{:catch error}
 			<p>{errorLoadingDataMessage}</p>
 		{/await}
