@@ -29,15 +29,16 @@ import {
 	__playButtonsFunctionality,
 	__wordMorphologyOnClick,
 	__homepageExtrasPanelVisible,
-	__downloadedDataInfo
+	__downloadedDataInfo,
+	__settingsDrawerHidden
 } from '$utils/stores';
+import { apiEndpoint } from '$data/websiteSettings';
 // import { uploadSettingsToCloud } from '$utils/cloudSettings';
 
 // function to update website settings
 export function updateSettings(props) {
 	// get the settings from localStorage
 	const userSettings = JSON.parse(localStorage.getItem('userSettings'));
-	let trackEvent = false;
 	// let uploadSettings = false;
 
 	switch (props.type) {
@@ -51,7 +52,6 @@ export function updateSettings(props) {
 			__fontType.set(props.value);
 			if (props.skipSave) return;
 			userSettings.displaySettings.fontType = props.value;
-			trackEvent = true;
 			break;
 
 		// for display types
@@ -59,21 +59,18 @@ export function updateSettings(props) {
 			__displayType.set(props.value);
 			if (props.skipSave) return;
 			userSettings.displaySettings.displayType = props.value;
-			if (!props.skipTrackEvent) trackEvent = true;
 			break;
 
 		// for word tooltip
 		case 'wordTooltip':
 			__wordTooltip.set(props.value);
 			userSettings.displaySettings.wordTooltip = props.value;
-			trackEvent = true;
 			break;
 
 		// for terminologies language
 		case 'englishTerminology':
 			__englishTerminology.set(props.value);
 			userSettings.displaySettings.englishTerminology = props.value;
-			trackEvent = true;
 			location.reload();
 			break;
 
@@ -81,7 +78,6 @@ export function updateSettings(props) {
 		case 'websiteTheme':
 			__websiteTheme.set(props.value);
 			userSettings.displaySettings.websiteTheme = props.value;
-			trackEvent = true;
 			location.reload();
 			break;
 
@@ -101,14 +97,12 @@ export function updateSettings(props) {
 		case 'wordTranslation':
 			__wordTranslation.set(props.value);
 			userSettings.translations.word = props.value;
-			trackEvent = true;
 			break;
 
 		// for word transliteration
 		case 'wordTransliteration':
 			__wordTransliteration.set(props.value);
 			userSettings.transliteration.word = props.value;
-			trackEvent = true;
 			break;
 
 		// for verse translations
@@ -128,21 +122,18 @@ export function updateSettings(props) {
 		case 'verseTafsir':
 			__verseTafsir.set(props.value);
 			userSettings.translations.tafsir = props.value;
-			trackEvent = true;
 			break;
 
 		// for verse reciter
 		case 'reciter':
 			__reciter.set(props.value);
 			userSettings.audioSettings.reciter = props.value;
-			trackEvent = true;
 			break;
 
 		// for translation reciter
 		case 'translationReciter':
 			__translationReciter.set(props.value);
 			userSettings.audioSettings.translationReciter = props.value;
-			trackEvent = true;
 			break;
 
 		// for playback speed
@@ -321,9 +312,17 @@ export function updateSettings(props) {
 			break;
 	}
 
-	// Track event change
-	if (trackEvent) {
-		// window.umami.track('Setting Change', { type: props.type, value: props.value });
+	// logging userSettings for analytics
+	try {
+		if (!get(__settingsDrawerHidden)) {
+			fetch(`${apiEndpoint}/log-settings`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(userSettings)
+			});
+		}
+	} catch (error) {
+		// ...
 	}
 
 	// update the settings back into localStorage and global store
