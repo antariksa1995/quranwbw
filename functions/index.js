@@ -12,6 +12,8 @@
  */
 
 export async function onRequest(context) {
+	console.log('test function');
+
 	const { request } = context;
 	const url = new URL(request.url);
 
