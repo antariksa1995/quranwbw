@@ -12,7 +12,7 @@ export const useLocalAPI = false;
 
 export const apiByPassCache = false; // If true, api response will not be cached by Cloudflare
 
-export const apiEndpoint = useLocalAPI ? 'http://localhost:7500/v1' : 'https://api.quranwbw.com/v1';
+export const apiEndpoint = useLocalAPI ? 'http://localhost:7500/v1' : 'https://api.alquran.cloud/v1/quran/';
 
 export const staticEndpoint = 'https://static.quranwbw.com/data/v4';
 
